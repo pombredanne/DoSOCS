@@ -55,19 +55,20 @@ Usage
 #####Options
 
 - `--packagePath [Path to archive]` Allows user to specify which package to run DoSPDX against.
-  - Conditonaly optional, Required if used with `-s` or `--scan`
+  - Conditionally optional, Required if used with `-s` or `--scan`
   - ***Example:*** `./DoSPDX.py -p archive.tar.bz2`
 - `-s` or `--scan` Runs a scan on the package specified in package path argument.
-  - Conditonaly optional, Required if used with `-s` or `--scan`
+  - Conditionally optional, Required if used with `-s` or `--scan`
   - ***Example:*** `./DoSPDX.py -p archive.tar.bz2 -s`
 - `--print [format]` Prints out SPDX document in specified format.
   - Optional
   - ***Example:*** `./DoSPDX.py --print TAG` or `./DoSPDX.py --print RDF`
+  - Note: Currently supported print formats are "TAG","RDF", and "JSON"
 - `--documentComment [Document Comment]` Specifies SPDX document Comment section.
   - Optional 
   - ***Example:*** `./DoSPDX.py --documentComment "Scanned as part of the Yocto build process."`
 - `--spdxDocId [SPDX Doc Id]` Used to generate the spdx document object from the MySql Database.
-  - Conditonaly optional, Required if `-s` or `--scan` is not used.
+  - Conditionally optional, Required if `-s` or `--scan` is not used.
   - ***Example:*** `./DoSPDX.py --spdxDocId 37` 
 - `--creator [Creator]` Specifies who is creating the SPDX document.
   - Optional
@@ -99,9 +100,21 @@ Usage
 - `--packageDescription [Description]` Allows user to enter a description of the package.
   - Optional
   - ***Example:*** `./DoSPDX.py --packageDescription "This package allows for hosting local content to the web."`
- 
+- `--scanOption [scanner]` Allows for user to specify which scanner they would like to use.
+  - Optional
+  - ***Example:*** `./DoSPDX.py --scanOption fossology --scan` 
+  - Note: if not specified Ninka and fossology will be used. The only supported scanOption is "fossology"
 
 
 Code Contributions
 ------------------
-All contributions to DoSOCS will be subject to review by the owner of the repo before being merged.
+All contributions to DoSOCS will be subject to review by the owner of the repo before being merged. The following methods are acceptable ways to request changes:
+- Pull requests
+- Submitting issues
+
+If you have any questions about this application feel free to send the developers an email.
+
+Developers
+----------
+- <a href="https://github.com/zwmcfarland">Zachary McFarland</a>
+- <a href="https://github.com/vpenmatsa">Venkata Krishana Penmastsa</a>

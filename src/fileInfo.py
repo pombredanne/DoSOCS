@@ -32,7 +32,7 @@ class fileInfo:
     def __init__(self, filePath=None, fileRelativePath = ""):
         self.filePath = filePath
         self.fileType = None
-        self.fileChecksum = None
+        self.fileChecksum = ""
         self.fileChecksumAlgorithm = "SHA1"
         self.licenseConcluded = "NO ASSERTION"
         self.licenseInfoInFile = []
@@ -51,6 +51,46 @@ class fileInfo:
         if self.filePath != None:
             self.getChecksum()
             self.fileName = os.path.split(filePath)[1]
+
+    def getFileInfoFromChecksum(self, dbCursor):
+        '''populates fileInfo from database'''
+
+        sqlCommand = """SELECT  pf.file_name,
+                                pf.file_type,
+                                pf.file_checksum,
+                                pf.license_concluded,
+                                pf.license_info_in_file,
+                                pf.license_comments,
+                                pf.file_copyright_text,
+                                pf.artifact_of_project_name,
+                                pf.artifact_of_project_homepage,
+                                pf.artifact_of_project_uri,
+                                pf.file_comment,
+                                pf.file_notice,
+                                pf.file_contributor,
+                                pf.file_dependency,
+                                pf.file_checksum_algorithm 
+                        FROM package_files AS pf
+                        WHERE pf.file_checksum = %s"""
+        dbCursor.execute(sqlCommand, self.fileChecksum)
+        queryResult = dbCursor.fetchone()
+
+        if queryResult != None:
+            self.fileName = queryResult[0]
+            self.fileType = queryResult[1]
+            self.licenseConcluded = queryResult[3]
+            self.licenseInfoInFile = queryResult[4].split(",")
+            self.licenseComments = queryResult[5]
+            self.fileCopyRightText = queryResult[6]
+            self.artifactOfProjectName = queryResult[7]
+            self.artifactOfProjectHomePage = queryResult[8]
+            self.artifactOfProjectURI = queryResult[9]
+            self.fileComment = queryResult[10]
+            self.fileNotice = queryResult[11]
+            self.fileContributor = queryResult[12]
+            self.fileDependency = queryResult[13]
+            self.fileChecksumAlgorithm = queryResult[14]
+
 
     def getFileInfo(self, package_file_id, package_id, dbCursor):
         '''populates fileInfo from database'''
@@ -83,7 +123,7 @@ class fileInfo:
             self.fileChecksum = queryResult[2]
             self.fileChecksumAlgorithm = queryResult[15]
             self.licenseConcluded = queryResult[3]
-            self.licenseInfoInFile = queryResult[4].split()
+            self.licenseInfoInFile = queryResult[4].split(",")
             self.licenseComments = queryResult[5]
             self.fileCopyRightText = queryResult[6]
             self.artifactOfProjectName = queryResult[7]
@@ -392,7 +432,7 @@ class fileInfo:
         with open(self.filePath, 'rb') as fileIn:
             self.fileChecksum = hashlib.sha1(fileIn.read()).hexdigest()
 
-    def populateFileInfo(self):
+    def populateFileInfo(self,scanOption):
         '''Runs the two scanners and parses their output into the fileInfo object''' 
 
         ''' Get File Type'''
@@ -407,57 +447,77 @@ class fileInfo:
 
         '''If it isn't cached, run scans, else get file from database.'''
         if cached == -1:
-            '''Scan to find licenses'''
-            '''Run Ninka'''
-            ninkaOutput = subprocess.check_output(
-                                            [settings.NINKA_PATH, self.filePath],
-                                    preexec_fn=lambda: signal(SIGPIPE, SIG_DFL)
-                                )
+           if scanOption == 'fossology':
+               '''Run fossology'''
+               '''Fossology doesn't return an exit code of 0 so we must always catch the output.'''
+               try:
+                   fossOutput = subprocess.check_output([settings.FOSSOLOGY_PATH,
+                                                        self.filePath])
+               except OSError as ose:
+                   print "Error running FOSSology nomos, check your path to nomos in settings.py"
+               except Exception as e:
+                  fossOutput = str(e.output)
 
-            '''Run fossology'''
-            '''Fossology doesn't return an exit code of 0 so we must always catch the output.'''
-            try:
-                fossOutput = subprocess.check_output([settings.FOSSOLOGY_PATH,
-                                                    self.filePath])
-            except Exception as e:
-                fossOutput = str(e.output)
+               '''Parse outputs'''
+               (fileName, fossLicense) = output_parser.foss_parser(fossOutput)
+               self.licenseInfoInFile.append(fossLicense)
+               self.licenseComments = "#FOSSology "
+               self.licenseComments += fossLicense
+           else:
+               '''Scan to find licenses'''
+               '''Run Ninka'''
+               ninkaOutput = subprocess.check_output(
+                                                     [settings.NINKA_PATH, self.filePath],
+                                                     preexec_fn=lambda: signal(SIGPIPE, SIG_DFL)
+                                                    )
 
-            '''Parse outputs'''
-            (fileName, ninkaLicense) = output_parser.ninka_parser(ninkaOutput)
-            (fileName, fossLicense) = output_parser.foss_parser(fossOutput)
+               '''Run fossology'''
+               '''Fossology doesn't return an exit code of 0 so we must always catch the output.'''
+               try:
+                   fossOutput = subprocess.check_output([settings.FOSSOLOGY_PATH,
+                                                       self.filePath])
+               except OSError as ose:
+                   print "Error running FOSSology nomos, check your path to nomos in settings.py"
+               except Exception as e:
+                   fossOutput = str(e.output)
 
-            '''Get extracted text from ninka "senttok" file'''
-            try:
-                with open(self.filePath + ".senttok", 'r') as f:
-                    for line in f:
-                        if ninkaLicense in line:
-                            line_tok = line.split(';')
-                            self.extractedText +=  line_tok[3] + "\n"
-                            self.extractedText +=  line_tok[4]
-            except Exception as e:
-                '''Do nothing, we just wont have extracted text for this license.'''
+               '''Parse outputs'''
+               (fileName, ninkaLicense) = output_parser.ninka_parser(ninkaOutput)
+               (fileName, fossLicense) = output_parser.foss_parser(fossOutput)
 
-            '''License merging logic.'''
-            fossLicense = fossLicense.upper().strip()
-            ninkaLicense = ninkaLicense.upper().strip()
-            match = output_parser.lic_compare(fossLicense, ninkaLicense)
-            
-            if match and fossLicense != 'ERROR':
-                self.licenseInfoInFile.append(fossLicense)
-            elif match and fossLicense == 'ERROR':
-                self.licenseInfoInFile.append(ninkaLicense)
-            elif not match and fossLicense == 'UNKNOWN':
-                self.licenseInfoInFile.append(ninkaLicense)
-            else:
-                self.licenseInfoInFile.append("NO ASSERTION")
+               '''Get extracted text from ninka "senttok" file'''
+               try:
+                   with open(self.filePath + ".senttok", 'r') as f:
+                       for line in f:
+                           if ninkaLicense in line:
+                               line_tok = line.split(';')
+                               self.extractedText +=  line_tok[3] + "\n"
+                               self.extractedText +=  line_tok[4]
+               except Exception as e:
+                   '''Do nothing, we just wont have extracted text for this license.'''
 
-            self.licenseComments = "#FOSSology "
-            self.licenseComments += fossLicense
-            self.licenseComments += " #Ninka "
-            self.licenseComments += ninkaLicense
+               '''License merging logic.'''
+               fossLicense = fossLicense.upper().strip()
+               ninkaLicense = ninkaLicense.upper().strip()
+               match = output_parser.lic_compare(fossLicense, ninkaLicense)
+               
+               if match and fossLicense != 'ERROR':
+                   self.licenseInfoInFile.append(fossLicense)
+               elif match and fossLicense == 'ERROR':
+                   self.licenseInfoInFile.append(ninkaLicense)
+               elif not match and fossLicense == 'UNKNOWN':
+                   self.licenseInfoInFile.append(ninkaLicense)
+               else:
+                   self.licenseInfoInFile.append("NO ASSERTION")
+
+               self.licenseComments = "#FOSSology "
+               self.licenseComments += fossLicense
+               self.licenseComments += " #Ninka "
+               self.licenseComments += ninkaLicense
         else:
             with MySQLdb.connect(host=settings.database_host,
-                                user=settings.database_user,
-                                passwd=settings.database_pass,
-                                db=settings.database_name) as dbCursor:
-                self.getFileInfo(cached, dbCursor)
+                                 user=settings.database_user,
+                                 passwd=settings.database_pass,
+                                 db=settings.database_name) as dbCursor:
+                self.getChecksum()
+                self.getFileInfoFromChecksum( dbCursor)

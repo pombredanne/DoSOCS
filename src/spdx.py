@@ -52,7 +52,9 @@ class SPDX:
                  packageHomePage=None,
                  packageSourceInfo=None,
                  packageLicenseComments=None,
-                 packageDescription=None):
+                 packageDescription=None,
+                 scanOption=None):
+        self.scanOption = scanOption
         self.packagePath = packagePath
         self.version = version
         self.dataLicense = dataLicense
@@ -302,7 +304,7 @@ class SPDX:
                 tempReviewerInfo.getReviwerInfo(dbCursorfetchone()[0], dbCursor)
                 self.reviewerInfo.append(tempReviewerInfo)
 
-    def generateSPDXDoc(self):
+    def generateSPDXDoc(self,scanOption):
         '''Generates the entire structure by querying and scanning the files.'''
         extractTo = tempfile.mkdtemp()
         ninka_out = tempfile.NamedTemporaryFile()
@@ -324,7 +326,7 @@ class SPDX:
                 for fileName in archive.getnames():
                     if os.path.isfile(os.path.join(extractTo, fileName)):
                         tempFileInfo = fileInfo.fileInfo(os.path.join(extractTo, fileName), os.path.join(path, fileName))
-                        tempFileInfo.populateFileInfo()
+                        tempFileInfo.populateFileInfo(scanOption)
                         tempLicenseInfo = licensingInfo.licensingInfo(
                                                         "LicenseRef-" + str(licenseCounter),
                                                         tempFileInfo.extractedText,
@@ -358,7 +360,7 @@ class SPDX:
                 for fileName in archive.namelist():
                     if os.path.isfile(os.path.join(extractTo, fileName)):
                         tempFileInfo = fileInfo.fileInfo(os.path.join(extractTo, fileName), os.path.join(path, fileName))
-                        tempFileInfo.populateFileInfo()
+                        tempFileInfo.populateFileInfo(scanOption)
                         tempLicenseInfo = licensingInfo.licensingInfo(
                                                         "LicenseRef-" + str(licenseCounter),
                                                         tempFileInfo.extractedText,
